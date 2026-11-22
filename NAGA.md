@@ -22,7 +22,7 @@ Keep Synapse's defaults. As your thumb sees the plate:
 | Plate | Row 1 | Row 2 | Row 3 | Row 4 |
 |---|---|---|---|---|
 | 12 buttons (3 wide, 4 high) | 1 2 3 | 4 5 6 | 7 8 9 | 0 - = |
-| 6 buttons (2 wide, 3 high) | 1 2 | 3 4 | 5 6 | |
+| 6 buttons (2 wide, 3 high) | 5 1 | 6 2 | 7 3 | |
 | 2 buttons | Mouse button 4 | Mouse button 5 | | |
 
 Healers of Azeroth's click editor uses the same shapes and order.
