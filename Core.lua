@@ -18,6 +18,9 @@ local accountDefaults = {
 }
 local charDefaults = {
 	plate = "none",      -- "none", "12" (3 wide x 4 high), "6" (2 x 3) or "2" (mouse 4 above 5)
+	keyset = "standard", -- which keys the Synapse buttons send: "standard" (1..9, 0, -, =), "numpad" or "learned"
+	learned = {},        -- the learn mode's keys per plate: learned["6"] = { [1] = "NUMPAD1", ... } (Synapse button number -> key)
+	shiftLayer = "auto", -- the Shift page: "auto" (off with numpad keys, NumLock eats Shift), true or false
 	bar = true,          -- a bar laid out like the plate, with the plate's keys bound to it
 	layers = true,       -- Shift, Ctrl and Alt switch the bar to pages 2, 3 and 4
 	rotationKey = true,  -- the Naga key of the spell Casters' rotation helper suggests, and its button glows
@@ -128,6 +131,15 @@ end
 function NoA:SetPlate(plate)
 	if not (self.Naga and self.Naga.PLATES[plate]) and plate ~= "none" then return end
 	self.char.plate = plate
+	self:Fire("SETTINGS", "naga")
+end
+
+-- choose the keys the Synapse buttons send: "standard", "numpad" or "learned"
+-- (the Shift page goes back to automatic: off with numpad keys)
+function NoA:SetKeyset(keyset)
+	if keyset ~= "standard" and keyset ~= "numpad" and keyset ~= "learned" then return end
+	self.char.keyset = keyset
+	self.char.shiftLayer = "auto"
 	self:Fire("SETTINGS", "naga")
 end
 

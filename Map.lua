@@ -10,11 +10,15 @@
 --
 --   NagasOfAzerothCharDB.map = {
 --     plate = "12",              -- "none", "12", "6" or "2"
+--     keyset = "numpad",         -- "standard", "numpad" or "learned": the keys the buttons send
+--     buttons = {                -- Synapse button number -> WoW key (a skipped button is left out)
+--       [1] = "NUMPAD1", [2] = "NUMPAD2", ..., [10] = "NUMPAD0", [11] = "NUMPADMINUS", [12] = "NUMPADPLUS",
+--     },
 --     updated = 1763820000,      -- time() of the last refresh
 --     class = "SHAMAN",          -- class token
 --     layers = {                 -- only layers with at least one cell
 --       [""] = {                 -- plain; then shift, ctrl, alt
---         ["1"] = {              -- the plate key: "1".."9", "0", "-", "=", "BUTTON4", "BUTTON5"
+--         ["1"] = {              -- the WoW key of a button ("1", "NUMPAD1", "BUTTON4", ...; see buttons)
 --           bar = "Healing Wave", barIcon = 136052,       -- Naga bar slot (spell, item or macro)
 --           hover = "Lesser Healing Wave", hoverIcon = 136043, -- Healers of Azeroth hover key
 --           bind = "ACTIONBUTTON1",                        -- Blizzard's own binding of the key
@@ -26,9 +30,11 @@
 --     },
 --   }
 --
--- Every field is optional except plate, updated, class and layers; cells with
--- nothing in them are left out; icons are fileIDs (numbers). The cells are in
--- plate order when you walk the plate's keys (see NAGA.md for the grid).
+-- Every field is optional except plate, keyset, buttons, updated, class and
+-- layers; cells with nothing in them are left out; icons are fileIDs (numbers).
+-- A cell's place on the plate: its key is buttons[n], and n sits in the plate's
+-- grid of Synapse button numbers (see NAGA.md: 12 = 1 2 3 / 4 5 6 / 7 8 9 /
+-- 10 11 12; 6 = 6 1 / 5 2 / 4 3; 2 = 1 above 2).
 local _, ns = ...
 local NoA = ns.NoA
 local L = NoA.L
@@ -83,9 +89,9 @@ function M:Cell(layer, i, hover)
 	local Nm = N()
 	local plate = Nm:Plate()
 	local key = plate and plate.keys[i]
-	if not key then return end
+	if not key then return end -- no plate, or a button the learn mode skipped
 	local full = Nm.LAYERS[layer].mod .. key
-	local cell = { key = key, full = full, label = Nm.PrettyKey(full) }
+	local cell = { key = key, full = full, label = Nm.PrettyKey(full), button = plate.buttons[i] }
 	local b = Nm.bound[full]
 	if b then
 		local slot = Nm.SLOTS[b.layer] + b.index - 1
@@ -107,18 +113,22 @@ function M:Cell(layer, i, hover)
 	return cell
 end
 
--- the whole map: { plate, updated, class, layers = { [""|shift|ctrl|alt] = { [key] = cell } } }
+-- the whole map: { plate, keyset, buttons, updated, class, layers = { [""|shift|ctrl|alt] = { [key] = cell } } }
 function M:Build()
 	local Nm = N()
 	local c = NoA.char
-	local map = { plate = c.plate or "none", updated = time(), class = select(2, UnitClass("player")), layers = {} }
+	local map = { plate = c.plate or "none", keyset = Nm:Keyset(), buttons = {}, updated = time(),
+		class = select(2, UnitClass("player")), layers = {} }
 	local plate = Nm:Plate()
 	if not plate then return map end
+	for i, n in ipairs(plate.buttons) do
+		if plate.keys[i] then map.buttons[n] = plate.keys[i] end
+	end
 	local hover = self:Hover()
 	for layer, l in ipairs(Nm.LAYERS) do
 		local cells = {}
 		for i in ipairs(plate.keys) do
-			local cell = self:Cell(layer, i, hover)
+			local cell = self:Cell(layer, i, hover) or {}
 			local out = {}
 			if cell.bar then out.bar, out.barIcon = cell.bar, cell.barIcon end
 			if cell.hover then out.hover, out.hoverIcon = cell.hover, cell.hoverIcon end
@@ -234,7 +244,7 @@ function M:Paint()
 	if not f then return end
 	local Nm = N()
 	local plate = Nm:Plate()
-	f.title:SetText(L["Naga map"] .. "  |cff999999" .. Nm.PlateName(NoA.char.plate) .. "|r")
+	f.title:SetText(L["Naga map"] .. "  |cff999999" .. Nm.PlateName(NoA.char.plate) .. ", " .. Nm.KeysetName(Nm:Keyset()) .. "|r")
 	for i, b in ipairs(f.tabs) do
 		b.selected = i == f.layer
 		b:SetBackdropBorderColor(unpack(b.selected and S.colors.accent or { 0, 0, 0, 1 }))
@@ -252,8 +262,15 @@ function M:Paint()
 			c:SetPoint("TOPLEFT", f.grid, "TOPLEFT", (col - 1) * (CW + GAP), -(row - 1) * (CH + GAP))
 			local cell = self:Cell(f.layer, i, hover)
 			f.shown[i] = cell
-			c.key:SetText(cell.label)
-			c.lines:SetText(table.concat(self:Lines(cell), "\n"))
+			if cell then
+				c.key:SetText(cell.label)
+				c.lines:SetText(table.concat(self:Lines(cell), "\n"))
+			else
+				-- a button the learn mode skipped: no key
+				cell = {}
+				c.key:SetText("-")
+				c.lines:SetText(L["no key (skipped)"])
+			end
 			local icon = cell.barIcon or cell.hoverIcon
 			c.icon:SetTexture(icon)
 			c.icon:SetShown(icon ~= nil)

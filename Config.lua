@@ -100,6 +100,20 @@ local function plates()
 	return out
 end
 
+local function keysets()
+	local Nm = NoA.Naga
+	local out = {}
+	for _, k in ipairs(Nm.KEYSET_ORDER) do out[#out + 1] = { k, Nm.KeysetName(k) } end
+	return out
+end
+
+-- "learned" only when this plate was learned; else the step goes on to standard
+local function setKeyset(v)
+	local c = NoA.char
+	if v == "learned" and not (type(c.learned) == "table" and type(c.learned[c.plate]) == "table") then v = "standard" end
+	NoA:SetKeyset(v)
+end
+
 -- the plate as a small grid with its key labels
 function C:BuildPicture(p)
 	local holder = CreateFrame("Frame", nil, p.frame)
@@ -119,7 +133,7 @@ function C:PaintPicture()
 	if not h then return end
 	local Nm = NoA.Naga
 	local plate = Nm:Plate()
-	h.title:SetText(Nm.PlateName(NoA.char.plate))
+	h.title:SetText(Nm.PlateName(NoA.char.plate) .. (plate and (", " .. Nm.KeysetName(Nm:Keyset())) or ""))
 	local n = plate and #plate.keys or 0
 	for i = 1, math.max(n, #h.cells) do
 		local c = h.cells[i]
@@ -135,7 +149,10 @@ function C:PaintPicture()
 			local row, col = Nm:Position(i, plate)
 			c:ClearAllPoints()
 			c:SetPoint("TOPLEFT", h, "TOPLEFT", (col - 1) * (PIC + PGAP), -(row - 1) * (PIC + PGAP))
-			c.text:SetText(Nm.KeyText(plate.keys[i]))
+			-- the real key labels ("Num1" for numpad keys), smaller when long
+			local label = Nm.KeyText(plate.keys[i])
+			S:ApplyFont(c.text, #label > 2 and 8 or 11)
+			c.text:SetText(label)
 			c.red = Nm:CellConflict(i)
 			local w = S.colors.warn
 			if c.red then c:SetBackdropBorderColor(w[1], w[2], w[3], 1) else c:SetBackdropBorderColor(0, 0, 0, 1) end
@@ -150,9 +167,19 @@ function C:Build(p)
 	p:Header("Razer Naga")
 	p:Note(L["Pick the side plate on your Naga. The bar, its key bindings and the pages follow at once (after combat when you are fighting)."])
 	p:Choice(L["Side plate"], plates(), function() return NoA.char.plate end, function(v) NoA:SetPlate(v) end)
+	-- which keys the Synapse buttons send: standard, numpad, or what the learn mode recorded
+	p:Choice(L["Keys"], keysets(), function() return NoA.Naga:Keyset() end, setKeyset)
+	p:Button(L["Learn my buttons"], function()
+		if SettingsPanel and SettingsPanel:IsShown() and HideUIPanel and not InCombatLockdown() then HideUIPanel(SettingsPanel) end
+		NoA.Naga:StartLearn()
+	end, 160)
 	p:Gap(4)
 	p:Check(L["Naga bar"], L["A bar laid out like the plate: drag spells on it. The plate's keys press its buttons; a Blizzard binding of the same key waits while the Naga bar is on."], opt("bar"))
 	p:Check("   " .. L["Shift, Ctrl and Alt: extra pages"], L["Set Synapse's Hypershift to send Shift, Ctrl or Alt with the same key: each gives the bar another page of spells."], opt("layers"))
+	p:Check("      " .. L["Shift page"], L["Off by default with numpad keys: with NumLock on, Windows turns Shift + a numpad key into another key, so WoW never sees it."],
+		function() return NoA.Naga:ShiftOn() end,
+		function(v) NoA.char.shiftLayer = v NoA:Fire("SETTINGS", "naga") end)
+	self.shiftNote = p:Note(L["Numpad keys: NumLock turns Shift + Num into other keys, so the Shift page is off. Use Ctrl and Alt in Hypershift."])
 	p:Check(L["Naga key in the rotation hint"], L["Casters of Azeroth: when the suggested spell is on the Naga bar, its key shows big under the hint (e.g. 7 or Shift 7) and that button glows."], opt("rotationKey"))
 	p:Check(L["Block bar-page switching on plate keys"], L["Blizzard binds Shift + 1 to 6 to its action bar pages. On the plate keys those go to the Naga bar's own pages, or do nothing; the rest of your keyboard keeps them."], opt("blockPaging"))
 	p:Note(L["The Naga bar uses action slots 37-48 (Blizzard's Right Bar 2) and, for Shift, Ctrl and Alt, the slots of Blizzard's bars 5, 6 and 7. /naga unlock to drag it."])
@@ -162,7 +189,7 @@ function C:Build(p)
 	local H, B = NoA:Healers()
 	if B then
 		p:Note(L["Healers of Azeroth's hover keys (mouse over a frame + a plate key) follow its own plate. Set here, saved in Healers of Azeroth."])
-		p:Check(L["Same plate for Healers"], L["Your plate choice here also sets Healers of Azeroth's hover plate, and the other way round."], opt("syncHealers"))
+		p:Check(L["Same plate and keys for Healers"], L["Your plate and keys here also set Healers of Azeroth's hover plate and keys (learned keys too), and the other way round."], opt("syncHealers"))
 		p:Choice(L["Healers hover plate"], plates(), function() return B:Plate() end, function(v)
 			if InCombatLockdown() then NoA:Print(L["Not in combat: try again after the fight."]) return end
 			B:SetPlate(v)
@@ -195,6 +222,11 @@ function C:Refresh()
 	local p = self.page
 	if not p then return end
 	for _, w in ipairs(p.widgets) do if w.refresh then w.refresh() end end
+	-- the note on Shift shows only while numpad keys keep the Shift page off
+	if self.shiftNote then
+		local Nm = NoA.Naga
+		self.shiftNote:SetText(Nm:Plate() and Nm:HasNumpad() and not Nm:ShiftOn() and L["Numpad keys: NumLock turns Shift + Num into other keys, so the Shift page is off. Use Ctrl and Alt in Hypershift."] or "")
+	end
 	self:PaintPicture()
 end
 

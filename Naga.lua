@@ -15,17 +15,111 @@ local N = NoA:NewModule("Naga")
 local LAB = LibStub("LibActionButton-1.0", true)
 local LBG = LibStub("LibButtonGlow-1.0", true)
 
--- the plates as the thumb sees them: keys row by row, as Synapse sends them by
--- default. 12: 3 wide, 4 high (1 2 3 / 4 5 6 / 7 8 9 / 0 - =); 6: 2 x 3
--- (1 2 / 3 4 / 5 6); 2: mouse button 4 above 5. Healers of Azeroth's click
--- editor uses the same shapes and order.
+local function cfg() return NoA.char end
+
+-- The plates as the thumb sees them, row by row, in Synapse's button numbers
+-- (Synapse numbers the buttons of each plate 1..N). 12: 3 wide, 4 high
+-- (1 2 3 / 4 5 6 / 7 8 9 / 10 11 12); 6: 2 x 3, left column 6 5 4 and right
+-- column 1 2 3 (rows 6 1 / 5 2 / 4 3); 2: button 1 above button 2.
+-- Healers of Azeroth's click editor uses the same shapes and order.
 local PLATES = {
-	["12"] = { rows = 4, cols = 3, keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" } },
-	["6"] = { rows = 3, cols = 2, keys = { "4", "1", "5", "2", "6", "3" } }, -- Synapse: left column 4 5 6, right column 1 2 3
-	["2"] = { rows = 2, cols = 1, keys = { "BUTTON4", "BUTTON5" } },
+	["12"] = { rows = 4, cols = 3, layout = { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 }, { 10, 11, 12 } } },
+	["6"] = { rows = 3, cols = 2, layout = { { 6, 1 }, { 5, 2 }, { 4, 3 } } },
+	["2"] = { rows = 2, cols = 1, layout = { { 1 }, { 2 } } },
 }
+for _, p in pairs(PLATES) do
+	p.buttons = {} -- button numbers in grid order (top left to bottom right)
+	for _, row in ipairs(p.layout) do
+		for _, n in ipairs(row) do p.buttons[#p.buttons + 1] = n end
+	end
+end
 N.PLATES = PLATES
 N.PLATE_ORDER = { "none", "12", "6", "2" }
+
+-- Keysets: which WoW key each Synapse button sends. "standard" is Synapse's
+-- default (1..9, 0, -, =), "numpad" is Num1..Num9, Num0, Num-, Num+, and
+-- "learned" is what the learn mode recorded (NagasOfAzerothCharDB.learned[plate]).
+-- The 2-button plate is mouse button 4 above 5 in standard and numpad.
+local KEYSETS = {
+	standard = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" },
+	numpad = { "NUMPAD1", "NUMPAD2", "NUMPAD3", "NUMPAD4", "NUMPAD5", "NUMPAD6", "NUMPAD7", "NUMPAD8", "NUMPAD9",
+		"NUMPAD0", "NUMPADMINUS", "NUMPADPLUS" },
+}
+local MOUSE_PLATE = { "BUTTON4", "BUTTON5" }
+N.KEYSETS = KEYSETS
+N.KEYSET_ORDER = { "standard", "numpad", "learned" }
+
+-- the WoW key of button n on a plate with a keyset (false: none, a skipped button)
+function N.KeyOf(plate, keyset, n, learned)
+	if keyset == "learned" and type(learned) == "table" and type(learned[plate]) == "table" then
+		local k = learned[plate][n]
+		return type(k) == "string" and k ~= "" and k or false
+	end
+	if plate == "2" then return MOUSE_PLATE[n] or false end
+	return KEYSETS.standard[n] and (KEYSETS[keyset] or KEYSETS.standard)[n] or false
+end
+
+-- the keyset in use: "learned" only when this plate was learned, else as chosen
+function N:Keyset()
+	local c = cfg()
+	local k = c.keyset
+	if k == "learned" then
+		local l = type(c.learned) == "table" and c.learned[c.plate]
+		if type(l) == "table" then return "learned" end
+		return "standard"
+	end
+	return KEYSETS[k] and k or "standard"
+end
+
+-- the plate in use with its keys: { rows, cols, layout, buttons, keys } where
+-- keys[i] is the WoW key of grid cell i (false for a skipped button)
+local plateCache = {}
+function N:Plate()
+	local c = cfg()
+	local p = PLATES[c.plate]
+	if not p then return end
+	local keyset = self:Keyset()
+	local sig = c.plate .. "|" .. keyset .. "|" .. (self.learnRev or 0)
+	local hit = plateCache[sig]
+	if hit then return hit end
+	local out = { rows = p.rows, cols = p.cols, layout = p.layout, buttons = p.buttons, keys = {}, keyset = keyset, name = c.plate }
+	for i, n in ipairs(p.buttons) do out.keys[i] = N.KeyOf(c.plate, keyset, n, c.learned) end
+	wipe(plateCache)
+	plateCache[sig] = out
+	return out
+end
+
+-- the learned keys changed: forget the cached plate
+function N:KeysChanged() self.learnRev = (self.learnRev or 0) + 1 end
+
+-- Windows turns Shift + a numpad key (NumLock on) into a navigation key, so WoW
+-- never sees SHIFT-NUMPAD1: with numpad keys the Shift page is off by default
+function N:HasNumpad(plate)
+	plate = plate or self:Plate()
+	if not plate then return false end
+	for _, k in ipairs(plate.keys) do
+		if k and k:match("^NUMPAD") then return true end
+	end
+	return false
+end
+
+function N:ShiftOn()
+	local v = cfg().shiftLayer
+	if v == true or v == false then return v end
+	return not self:HasNumpad()
+end
+
+-- the pages in use: 1 (plain), and with pages on also Shift (2), Ctrl (3), Alt (4)
+function N:ActiveLayers()
+	if not cfg().layers then return { 1 } end
+	if self:ShiftOn() then return { 1, 2, 3, 4 } end
+	return { 1, 3, 4 }
+end
+
+function N:Driver()
+	if self:ShiftOn() then return self.DRIVER end
+	return self.DRIVER_NOSHIFT
+end
 
 -- pages: no modifier, then Shift, Ctrl and Alt (Synapse's Hypershift sends these)
 local LAYERS = {
@@ -36,6 +130,7 @@ local LAYERS = {
 }
 N.LAYERS = LAYERS
 N.DRIVER = "[mod:shift] 2; [mod:ctrl] 3; [mod:alt] 4; 1"
+N.DRIVER_NOSHIFT = "[mod:ctrl] 3; [mod:alt] 4; 1"
 -- first action slot of each page: Right Bar 2 (37-48), then the slots of bars 5, 6 and 7
 N.SLOTS = { 37, 145, 157, 169 }
 
@@ -46,10 +141,6 @@ N.bound = {}     -- full key ("SHIFT-7") -> { index, layer } while the Naga bar 
 N.conflicts = {} -- full key -> Blizzard binding the Naga bar overrides
 N.paging = {}    -- full key -> Blizzard's bar paging action on a modifier + plate key
 N.blocked = {}   -- full key -> true while Nagas keeps it from paging
-
-local function cfg() return NoA.char end
-
-function N:Plate() return PLATES[cfg().plate] end
 
 -- row and column of button i on a plate
 function N:Position(i, plate)
@@ -74,12 +165,25 @@ local function splitKey(full)
 end
 N.SplitKey = splitKey
 
+local NUMPAD_TEXT = { NUMPADMINUS = "-", NUMPADPLUS = "+", NUMPADMULTIPLY = "*", NUMPADDIVIDE = "/", NUMPADDECIMAL = "." }
+
+-- "BUTTON4" -> "M4", "NUMPAD1" -> "Num1", "NUMPADPLUS" -> "Num+", none -> "-"
 local function keyText(key)
+	if not key then return "-" end
 	local n = key:match("^BUTTON(%d+)$")
 	if n then return "M" .. n end
+	local p = key:match("^NUMPAD(.+)$")
+	if p then return "Num" .. (NUMPAD_TEXT[key] or p) end
 	return key
 end
 N.KeyText = keyText
+
+-- short, for the bar's small labels: "NUMPAD1" -> "N1"
+local function shortText(key)
+	if key and key:match("^NUMPAD") then return "N" .. keyText(key):sub(4) end
+	return keyText(key)
+end
+N.ShortText = shortText
 
 -- "SHIFT-7" -> "Shift 7", "BUTTON4" -> "M4" (sep "+": "Shift+7")
 local function prettyKey(full, sep)
@@ -230,9 +334,9 @@ function N:Apply()
 	wipe(self.bound)
 	if bar then
 		local on = plate ~= nil and c.bar and true or false
-		local layers = on and c.layers and #LAYERS or 1
+		local layers = self:ActiveLayers()
 		ClearOverrideBindings(bar)
-		RegisterStateDriver(bar.header, "page", (on and c.layers) and self.DRIVER or "1")
+		RegisterStateDriver(bar.header, "page", (on and c.layers) and self:Driver() or "1")
 		local n = on and #plate.keys or 0
 		for i, btn in ipairs(bar.buttons) do
 			btn:ClearAllPoints()
@@ -245,10 +349,12 @@ function N:Apply()
 				-- the plate's key (and Shift / Ctrl / Alt + key) clicks this button; it wins
 				-- over a Blizzard binding of the same key only while the Naga bar is on
 				local key = plate.keys[i]
-				for layer = 1, layers do
-					local full = LAYERS[layer].mod .. key
-					SetOverrideBindingClick(bar, true, full, btn:GetName(), "Keybind")
-					self.bound[full] = { index = i, layer = layer }
+				if key then
+					for _, layer in ipairs(layers) do
+						local full = LAYERS[layer].mod .. key
+						SetOverrideBindingClick(bar, true, full, btn:GetName(), "Keybind")
+						self.bound[full] = { index = i, layer = layer }
+					end
 				end
 			else
 				btn:SetPoint("CENTER", bar, "CENTER")
@@ -284,7 +390,7 @@ function N:ApplyBlock()
 	local want = {}
 	if plate and c.blockPaging then
 		for _, key in ipairs(plate.keys) do
-			for layer = 2, #LAYERS do
+			for layer = 2, key and #LAYERS or 1 do
 				local full = LAYERS[layer].mod .. key
 				if not self.bound[full] and isPaging(blizzBinding(full)) then want[#want + 1] = full end
 			end
@@ -319,7 +425,7 @@ function N:RefreshConflicts(tell)
 	local plate = self:Plate()
 	if plate then
 		for _, key in ipairs(plate.keys) do
-			for layer = 2, #LAYERS do
+			for layer = 2, key and #LAYERS or 1 do
 				local full = LAYERS[layer].mod .. key
 				local a = blizzBinding(full)
 				if isPaging(a) then
@@ -359,7 +465,7 @@ end
 -- the page you see now, as the state driver picks it
 function N:CurrentLayer()
 	if not cfg().layers then return 1 end
-	if IsShiftKeyDown() then return 2 end
+	if IsShiftKeyDown() and self:ShiftOn() then return 2 end
 	if IsControlKeyDown() then return 3 end
 	if IsAltKeyDown() then return 4 end
 	return 1
@@ -372,7 +478,7 @@ function N:UpdateLabels()
 	local layer = self:CurrentLayer()
 	for i, btn in ipairs(bar.buttons) do
 		local key = plate and plate.keys[i]
-		btn.label:SetText(key and (LAYERS[layer].short .. keyText(key)) or "")
+		btn.label:SetText(key and (LAYERS[layer].short .. shortText(key)) or "")
 	end
 end
 
@@ -384,9 +490,9 @@ function N:KeyFor(name)
 	local c = cfg()
 	local plate = self:Plate()
 	if not (name and plate and c.bar and self.bar and self.bar:IsShown()) then return end
-	for layer = 1, c.layers and #LAYERS or 1 do
+	for _, layer in ipairs(self:ActiveLayers()) do
 		for i, key in ipairs(plate.keys) do
-			if slotName(self.SLOTS[layer] + i - 1) == name then
+			if key and slotName(self.SLOTS[layer] + i - 1) == name then
 				return prettyKey(LAYERS[layer].mod .. key), self.bar.buttons[i], layer
 			end
 		end
@@ -496,14 +602,25 @@ function N:CreateTest()
 
 	f.mapBtn = S:Button(f, L["Naga map"], 120, function() NoA.Map:Open() end)
 	f.mapBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -12, 10)
+	-- learn mode: which key each Synapse button sends, button by button
+	f.learnBtn = S:Button(f, L["Learn my buttons"], 150, function() N:ToggleLearn() end)
+	f.learnBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 12, 10)
+	f.skipBtn = S:Button(f, L["Skip"], 80, function() N:LearnSkip() end)
+	f.skipBtn:SetPoint("LEFT", f.learnBtn, "RIGHT", 6, 0)
+	f.skipBtn:Hide()
 
-	-- keys pass on to the game: the test screen only watches
+	-- keys pass on to the game: the test screen only watches (not while learning)
 	f:EnableKeyboard(true)
 	f:SetPropagateKeyboardInput(true)
 	f:SetScript("OnKeyDown", function(fr, key) N:OnTestKey(fr, key) end)
 	f:SetScript("OnMouseDown", function(_, button)
 		local k = MOUSE[button]
-		if k then N:Arrive(withModifiers(k)) end
+		if not k then return end
+		if N.learn then
+			if k ~= "BUTTON3" then N:LearnKey(k) end
+			return
+		end
+		N:Arrive(withModifiers(k))
 	end)
 	self.testFrame = f
 end
@@ -517,6 +634,10 @@ function N:Cell(i)
 	S:Backdrop(cell, 1)
 	cell.key = S:Font(cell, 16)
 	cell.key:SetPoint("TOP", cell, "TOP", 0, -5)
+	-- Synapse's number of the button
+	cell.num = S:Font(cell, 9)
+	cell.num:SetPoint("TOPLEFT", cell, "TOPLEFT", 4, -3)
+	cell.num:SetTextColor(unpack(S.colors.muted))
 	cell.what = S:Font(cell, 10)
 	cell.what:SetPoint("TOPLEFT", cell, "TOPLEFT", 4, -26)
 	cell.what:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -4, 3)
@@ -535,11 +656,23 @@ function N.PlateName(key)
 end
 local plateName = N.PlateName
 
+function N.KeysetName(key)
+	if key == "numpad" then return L["Numpad (Num1 to Num+)"] end
+	if key == "learned" then return L["Learned"] end
+	return L["Standard (1 to =)"]
+end
+
 function N:LayoutTest()
 	local f = self.testFrame
 	local plate = self:Plate()
-	f.title:SetText(L["Razer Naga test"] .. "  |cff999999" .. plateName(cfg().plate) .. "|r")
-	f.body:SetText(L["Press your Naga buttons (with Shift, Ctrl or Alt for the other pages). Keys keep working while this is open; nothing is cast from here. Click mouse buttons 4 and 5 over this window. Red = bound twice. Esc closes."])
+	f.title:SetText(L["Razer Naga test"] .. "  |cff999999" .. plateName(cfg().plate) .. ", " .. N.KeysetName(self:Keyset()) .. "|r")
+	if self.learn then
+		f.body:SetText(L["Learn mode: press each Naga button when it is asked for, without Shift, Ctrl or Alt. Keys stop here: nothing reaches your bars and nothing is cast. Click mouse buttons 4 and 5 over this window. Skip leaves a button empty, Esc cancels."])
+	else
+		f.body:SetText(L["Press your Naga buttons (with Shift, Ctrl or Alt for the other pages). Keys keep working while this is open; nothing is cast from here. Click mouse buttons 4 and 5 over this window. Red = bound twice. Esc closes."])
+	end
+	f.learnBtn.text:SetText(self.learn and L["Stop learning"] or L["Learn my buttons"])
+	f.skipBtn:SetShown(self.learn ~= nil)
 	local top = 20 + 14 + 6 + math.max(f.body:GetStringHeight() or 0, 28) + 12
 	local cols, rows = plate and plate.cols or 0, plate and plate.rows or 0
 	f.grid:ClearAllPoints()
@@ -567,15 +700,59 @@ function N:LayoutTest()
 	f:SetSize(math.max(440, cols * (CELL_W + CELL_GAP) + 24), top + gridH + 140)
 end
 
+-- learn mode: the cell asked for now is lit, learned cells show their key
+function N:PaintLearn()
+	local f, lr = self.testFrame, self.learn
+	local p = PLATES[lr.plate]
+	local a, h, bg = S.colors.accent, S.colors.hint, S.colors.bg
+	for i, cell in ipairs(f.cells) do
+		local n = p.buttons[i]
+		if n and cell:IsShown() then
+			local k = lr.keys[n]
+			cell.num:SetText(tostring(n))
+			cell.key:SetText(k and keyText(k) or (n < lr.step and "-" or "?"))
+			cell.what:SetText(n == lr.step and L["press it now"] or (n < lr.step and not k and L["skipped"]) or "")
+			cell.red = false
+			cell.lit = n == lr.step
+			if cell.lit then
+				cell:SetBackdropColor(h[1], h[2], h[3], 0.45)
+				cell:SetBackdropBorderColor(h[1], h[2], h[3], 1)
+			else
+				if k then cell:SetBackdropColor(a[1], a[2], a[3], 0.15) else cell:SetBackdropColor(bg[1], bg[2], bg[3], 1) end
+				cell:SetBackdropBorderColor(0, 0, 0, 1)
+			end
+		end
+	end
+	f.last:SetText(L["Press button %d of %d."]:format(lr.step, lr.count))
+	f.last:SetTextColor(h[1], h[2], h[3])
+	if lr.warn then
+		f.off:SetText("|cffff4d4d" .. lr.warn .. "|r")
+	else
+		f.off:SetText(L["Skip leaves a button empty. Esc cancels."])
+	end
+end
+
 function N:PaintTest()
 	local f = self.testFrame
 	if not f then return end
+	if self.learn then return self:PaintLearn() end
 	local t = self.test
 	local plate = self:Plate()
 	local a, w = S.colors.accent, S.colors.warn
 	for i, cell in ipairs(f.cells) do
 		local key = plate and plate.keys[i]
-		if key and cell:IsShown() then
+		if plate and i <= #plate.keys and cell:IsShown() then
+			cell.num:SetText(tostring(plate.buttons[i]))
+		end
+		if plate and key == false and cell:IsShown() then
+			-- a button the learn mode skipped: no key, nothing bound
+			cell.key:SetText("-")
+			cell.what:SetText(L["no key (skipped)"])
+			cell.red, cell.lit = false, false
+			local bg = S.colors.bg
+			cell:SetBackdropColor(bg[1], bg[2], bg[3], 1)
+			cell:SetBackdropBorderColor(0, 0, 0, 1)
+		elseif key and cell:IsShown() then
 			local seen = t.lit[i]
 			local d = seen or self:Describe(key)
 			cell.key:SetText(seen and d.label or keyText(key))
@@ -642,6 +819,13 @@ function N:Arrive(full)
 end
 
 function N:OnTestKey(frame, key)
+	if self.learn then
+		-- learning: keys stop here (no propagation), Escape cancels
+		if key == "ESCAPE" then return self:LearnCancel() end
+		if IGNORE[key] then return end
+		self:LearnKey(key)
+		return
+	end
 	if key == "ESCAPE" then
 		-- Escape closes the test screen and goes no further
 		if not InCombatLockdown() then frame:SetPropagateKeyboardInput(false) end
@@ -659,6 +843,7 @@ function N:OpenTest()
 		return
 	end
 	if not self.testFrame then self:CreateTest() end
+	self.learn = nil
 	self.test = { lit = {}, offPlate = {} }
 	self:RefreshConflicts()
 	self.testFrame:SetPropagateKeyboardInput(true)
@@ -668,6 +853,7 @@ function N:OpenTest()
 end
 
 function N:CloseTest()
+	if self.learn then self:LearnStop(true) end
 	if self.testFrame then self.testFrame:Hide() end
 end
 
@@ -676,30 +862,188 @@ function N:ToggleTest()
 end
 
 ---------------------------------------------------------------------------
--- Healers of Azeroth: the same plate for its hover keys (when the check is on)
+-- Learn mode: "press button 1", "press button 2", ... in Synapse's order. The
+-- key that arrives (without modifiers) is saved per plate as the "learned"
+-- keyset. While learning the keys stop at the test screen: nothing is cast.
 ---------------------------------------------------------------------------
+function N:StartLearn()
+	if InCombatLockdown() then
+		NoA:Print(L["The Naga test screen opens out of combat."])
+		return
+	end
+	local p = cfg().plate
+	if not PLATES[p] then
+		NoA:Print(L["No side plate chosen: pick one in the Razer Naga settings (/naga)."])
+		return
+	end
+	if not (self.testFrame and self.testFrame:IsShown()) then self:OpenTest() end
+	self.learn = { plate = p, step = 1, count = #PLATES[p].buttons, keys = {} }
+	self.testFrame:SetPropagateKeyboardInput(false)
+	self:LayoutTest()
+	self:PaintTest()
+end
+
+function N:ToggleLearn()
+	if self.learn then self:LearnCancel() else self:StartLearn() end
+end
+
+-- a key arrived for the button asked for: false when it already came for another button
+function N:LearnKey(key)
+	local lr = self.learn
+	if not lr or type(key) ~= "string" then return end
+	for n, k in pairs(lr.keys) do
+		if k == key then
+			lr.warn = L["%s already arrived for button %d: press another key, or Skip."]:format(keyText(key), n)
+			self:PaintTest()
+			return false
+		end
+	end
+	lr.keys[lr.step] = key
+	lr.warn = nil
+	self:LearnNext()
+	return true
+end
+
+function N:LearnSkip()
+	if not self.learn then return end
+	self.learn.warn = nil
+	self:LearnNext()
+end
+
+function N:LearnNext()
+	local lr = self.learn
+	lr.step = lr.step + 1
+	if lr.step > lr.count then return self:LearnSave() end
+	self:PaintTest()
+end
+
+-- end learning. Keys go back to the game a moment later, so the key you just
+-- pressed (or its release) never reaches a bar. now: at once (no key is down)
+function N:LearnStop(now)
+	self.learn = nil
+	local f = self.testFrame
+	if not f then return end
+	local function release()
+		if self.learn then return end
+		if not InCombatLockdown() then
+			f:SetPropagateKeyboardInput(true)
+		else
+			f:Hide() -- in combat it can't let keys through: hidden, it takes none
+		end
+	end
+	if now then release() else C_Timer.After(0.5, release) end
+end
+
+function N:LearnCancel()
+	self:LearnStop()
+	if self.testFrame and self.testFrame:IsShown() then
+		self:LayoutTest()
+		self:PaintTest()
+	end
+end
+
+function N:LearnSave()
+	local lr = self.learn
+	local c = cfg()
+	self:LearnStop()
+	if not next(lr.keys) then
+		NoA:Print(L["Nothing learned: your keys stay as they were."])
+	else
+		c.learned = type(c.learned) == "table" and c.learned or {}
+		local t, parts = {}, {}
+		for n = 1, lr.count do
+			t[n] = lr.keys[n]
+			parts[#parts + 1] = n .. " " .. keyText(lr.keys[n])
+		end
+		c.learned[lr.plate] = t
+		c.keyset = "learned"
+		c.shiftLayer = "auto"
+		self:KeysChanged()
+		NoA:Print(L["Learned: %s."]:format(table.concat(parts, ", ")))
+		NoA:Fire("SETTINGS", "naga")
+	end
+	if self.testFrame and self.testFrame:IsShown() then
+		self.test = { lit = {}, offPlate = {} }
+		self:RefreshConflicts()
+		self:LayoutTest()
+		self:PaintTest()
+	end
+end
+
+---------------------------------------------------------------------------
+-- Healers of Azeroth: the same plate and keys for its hover keys (when the check is on)
+---------------------------------------------------------------------------
+local function serial(t)
+	if type(t) ~= "table" then return "" end
+	local out = {}
+	for n = 1, 12 do out[n] = type(t[n]) == "string" and t[n] or "" end
+	return table.concat(out, ",")
+end
+
+local function learnedSig(l)
+	if type(l) ~= "table" then return "" end
+	local out = {}
+	for _, p in ipairs({ "12", "6", "2" }) do out[#out + 1] = p .. ":" .. serial(l[p]) end
+	return table.concat(out, ";")
+end
+
+-- Healers has the same plate, keyset, learned keys and Shift choice
+function N:HealersInSync(B)
+	local c = cfg()
+	if B:Plate() ~= c.plate then return false end
+	if type(B.SetKeyset) ~= "function" then return true end -- an older Healers: plate only
+	if B:KeysetChoice() ~= (c.keyset or "standard") then return false end
+	if learnedSig(B:Learned()) ~= learnedSig(c.learned) then return false end
+	if type(B.SetShift) == "function" and B:ShiftChoice() ~= c.shiftLayer then return false end
+	return true
+end
+
+function N:RememberHealers(B)
+	self.healersPlate = B:Plate()
+	self.healersKeyset = type(B.KeysetChoice) == "function" and B:KeysetChoice() or nil
+end
+
 function N:SyncHealers()
 	local c = cfg()
 	local _, B = NoA:Healers()
-	if not (B and c.syncHealers) then return end
-	if B:Plate() == c.plate then return end
+	if not (B and c.syncHealers) or self:HealersInSync(B) then return end
 	-- Healers applies its secure attributes out of combat; we ask out of combat too
 	NoA:OutOfCombat("noa-healers", function()
-		if B:Plate() ~= cfg().plate then
-			self.healersPlate = cfg().plate
-			B:SetPlate(cfg().plate)
-		end
+		if self:HealersInSync(B) then return end
+		local cc = cfg()
+		self.pushing = true
+		if B:Plate() ~= cc.plate then B:SetPlate(cc.plate) end
+		if type(B.SetKeyset) == "function" then B:SetKeyset(cc.keyset or "standard", cc.learned) end
+		if type(B.SetShift) == "function" then B:SetShift(cc.shiftLayer) end
+		self.pushing = nil
+		self:RememberHealers(B)
 	end)
 end
 
--- Healers' plate changed in its own settings: follow it when the check is on
+-- Healers' plate or keys changed in its own settings: follow when the check is on
 function N:HealersChanged()
+	if self.pushing then return end
 	local _, B = NoA:Healers()
 	if not B then return end
 	local p = B:Plate()
-	if p == self.healersPlate then return end
-	self.healersPlate = p
-	if cfg().syncHealers and p ~= cfg().plate and (p == "none" or PLATES[p]) then NoA:SetPlate(p) end
+	local k = type(B.KeysetChoice) == "function" and B:KeysetChoice() or nil
+	if p == self.healersPlate and k == self.healersKeyset then return end
+	local pChanged, kChanged = p ~= self.healersPlate, k ~= self.healersKeyset
+	self:RememberHealers(B)
+	local c = cfg()
+	if not c.syncHealers then return end
+	local changed = false
+	-- Healers itself offers standard and numpad; learning happens here
+	if kChanged and (k == "standard" or k == "numpad") and k ~= c.keyset then
+		c.keyset = k
+		c.shiftLayer = "auto"
+		changed = true
+	end
+	if pChanged and p ~= c.plate and (p == "none" or PLATES[p]) then
+		c.plate = p
+		changed = true
+	end
+	if changed then NoA:Fire("SETTINGS", "naga") end
 end
 
 ---------------------------------------------------------------------------
@@ -708,6 +1052,8 @@ end
 function N:OnEnable()
 	local c = cfg()
 	if not PLATES[c.plate] then c.plate = "none" end
+	if c.keyset ~= "numpad" and c.keyset ~= "learned" then c.keyset = "standard" end
+	if type(c.learned) ~= "table" then c.learned = {} end
 	self.test = { lit = {}, offPlate = {} }
 	self:BuildBlocker()
 	NoA:OutOfCombat("noa-build", function()
@@ -721,10 +1067,17 @@ function N:OnEnable()
 	end)
 	local H, B = NoA:Healers()
 	if B then
-		self.healersPlate = B:Plate()
+		self:RememberHealers(B)
 		if H.Listen then H:Listen("BINDINGS", function() self:HealersChanged() NoA:Fire("NAGA_CHANGED") end) end
 	end
 	NoA:On("MODIFIER_STATE_CHANGED", function() self:UpdateLabels() end)
+	-- a fight starts while learning: stop, so the window never holds your keys in combat
+	NoA:On("PLAYER_REGEN_DISABLED", function()
+		if self.learn then
+			self:LearnStop(true)
+			if self.testFrame and self.testFrame:IsShown() then self:LayoutTest() self:PaintTest() end
+		end
+	end)
 	-- your Blizzard bindings changed: which keys are bound twice, and the paging guard
 	NoA:On("UPDATE_BINDINGS", function()
 		NoA:OutOfCombat("noa-block", function() self:ApplyBlock() end)

@@ -15,37 +15,59 @@ The panel shows a small picture of the plate with its keys. Commands: `/naga` or
 (settings), `/naga map` (the Naga map), `/naga test` (the test screen). `/coa naga` in
 Casters of Azeroth still opens the test screen.
 
-## 2. Keys Synapse should send per plate
+## 2. Synapse: the buttons and the keys they send
 
-Keep Synapse's defaults. As your thumb sees the plate:
+Synapse numbers the buttons of each side plate 1 to N. As your thumb sees the plate:
 
 | Plate | Row 1 | Row 2 | Row 3 | Row 4 |
 |---|---|---|---|---|
-| 12 buttons (3 wide, 4 high) | 1 2 3 | 4 5 6 | 7 8 9 | 0 - = |
-| 6 buttons (2 wide, 3 high) | 4 1 | 5 2 | 6 3 | |
-| 2 buttons | Mouse button 4 | Mouse button 5 | | |
+| 12 buttons (3 wide, 4 high) | 1 2 3 | 4 5 6 | 7 8 9 | 10 11 12 |
+| 6 buttons (2 wide, 3 high) | 6 1 | 5 2 | 4 3 | |
+| 2 buttons | 1 (mouse button 4) | 2 (mouse button 5) | | |
 
+So on the 6-button plate the left column is 6 5 4 and the right column 1 2 3 (top to bottom).
 Healers of Azeroth's click editor uses the same shapes and order.
+
+In the panel, **Keys** says which key each button sends:
+
+| Keys | Buttons 1 to 9 | 10 | 11 | 12 | 2-button plate |
+|---|---|---|---|---|---|
+| Standard (Synapse's default) | 1 to 9 | 0 | - | = | Mouse 4, Mouse 5 |
+| Numpad | Num1 to Num9 | Num0 | Num- | Num+ | Mouse 4, Mouse 5 |
+| Learned | what the learn mode recorded (section 8) | | | | |
+
+**Numpad is recommended.** In Synapse, map button 1 to Num1, button 2 to Num2, and so on
+(button 10 = Num0, 11 = Num-, 12 = Num+). Then the keyboard keys 1 to = stay your main
+action bar, and Blizzard's bar paging (Shift + 1 to 6) never gets in the way.
+Keep NumLock on.
+
+With the standard keys, the keyboard keys 1 to = and the Naga send the same keys. While the
+Naga bar is on, those keys press the Naga bar, not your main action bar. The add-on tells you
+in chat which keys it takes over; turn the Naga bar off and they go back.
 
 Each button sends exactly one key. Do not map a button to a macro or a key sequence.
 
-Note: the keyboard keys 1 to = and the Naga send the same keys. While the Naga bar
-is on, those keys press the Naga bar, not your main action bar. The add-on tells you
-in chat which keys it takes over; turn the Naga bar off and they go back.
+The panel shows a small picture of the plate with the real key labels (Num1 style for numpad keys).
 
 ## 3. Hypershift: Shift, Ctrl and Alt pages
 
-In Synapse, set a Hypershift layer where each button sends **Shift + the same key**
-(for example Shift + 7). Add more layers with **Ctrl +** and **Alt +** the same key if you want.
+In Synapse, set a Hypershift layer where each button sends **Ctrl + the same key**
+(for example Ctrl + Num7), and one with **Alt +** the same key if you want.
+
+**Use Ctrl and Alt rather than Shift.** With NumLock on, Windows turns Shift + a numpad key into
+another key (Shift + Num1 becomes End), so WoW never sees "Shift + Num1". That is why the
+**Shift page** is off by default with numpad keys (or learned keys that are numpad keys); the
+panel then shows a short note. With the standard keys Shift works, but Blizzard uses Shift + 1 to 6
+for its bar pages (see below). You can still turn the Shift page on in the panel.
 
 In the panel, **Shift, Ctrl and Alt: extra pages** must be on. Then:
 
 - no modifier = page 1
-- Shift = page 2
+- Shift = page 2 (when the Shift page is on)
 - Ctrl = page 3
 - Alt = page 4
 
-The labels on the Naga bar show the page you are on (S7, C7, A7).
+The labels on the Naga bar show the page you are on (S7, C7, A7; with numpad keys N7, CN7, AN7).
 
 ### Blizzard's bar paging
 
@@ -57,6 +79,7 @@ on the keys of your plate:
 - Naga bar on with pages: Shift + key presses the Naga bar's Shift page.
 - Pages off, or the Naga bar off: Shift + key does nothing.
 - Keys that are not on your plate keep Blizzard's paging. Plate "None" or the option off: everything is as before.
+- This only matters for the standard keys: numpad keys do not page.
 
 The test screen and the Naga map show such keys in red: "Shift+1 switches your action bar page".
 
@@ -64,7 +87,12 @@ The test screen and the Naga map show such keys in red: "Shift+1 switches your a
 
 With Healers of Azeroth loaded, the panel also shows its hover plate and its
 **Shift, Ctrl and Alt** check. They are saved in Healers of Azeroth itself.
-**Same plate for Healers** (on by default) keeps both plates the same: change one and the other follows.
+**Same plate and keys for Healers** (on by default) keeps both the same: plate, keys (learned keys
+too) and the Shift page. Change one and the other follows. Healers of Azeroth also has its own
+**Razer Naga keys** choice (standard or numpad) for people without Nagas of Azeroth.
+
+Healers keeps its hover spells per Synapse button number, so when you change the keys, what
+button 3 did stays on button 3, whatever key it sends now.
 
 ## 5. Let Synapse switch to the WoW profile by itself
 
@@ -96,6 +124,19 @@ Type `/naga test` (or **Test screen** in the panel or on the Naga map). You see 
 - **Not on the plate**: a key arrived that does not belong to your plate. Check Synapse's mapping for that button.
 - Your keys keep working while the screen is open; it never casts anything. Esc or X closes it.
 - The test screen opens out of combat only.
+- Each cell shows Synapse's button number in its corner.
+
+### Learn my buttons
+
+Not sure what Synapse sends? Click **Learn my buttons** (in the test screen or the panel).
+
+- It asks "Press button 1 of 6", "Press button 2 of 6", ... in Synapse's order; the cell of that
+  button lights up.
+- Press that Naga button, without Shift, Ctrl or Alt. Mouse buttons 4 and 5: click them over the window.
+- **Skip** leaves a button empty (it gets no key). **Esc** cancels; nothing is saved.
+- If the same key arrives twice, it warns you and asks again for the same button.
+- While learning, the keys stop at the window: nothing reaches your bars and nothing is cast.
+- At the end the keys are saved for that plate and **Keys** switches to **Learned**.
 
 ## 9. The Naga map
 
@@ -126,11 +167,15 @@ change, and at logout.
 ```lua
 NagasOfAzerothCharDB.map = {
   plate = "12",              -- "none", "12", "6" or "2"
+  keyset = "numpad",         -- "standard", "numpad" or "learned"
+  buttons = {                -- Synapse button number -> WoW key (a skipped button is left out)
+    [1] = "NUMPAD1", [2] = "NUMPAD2", ..., [10] = "NUMPAD0", [11] = "NUMPADMINUS", [12] = "NUMPADPLUS",
+  },
   updated = 1763820000,      -- time() of the last refresh
   class = "SHAMAN",          -- class token
   layers = {                 -- [""] = plain, shift, ctrl, alt; only layers with cells
     [""] = {
-      ["1"] = {              -- plate key: "1".."9", "0", "-", "=", "BUTTON4", "BUTTON5"
+      ["NUMPAD1"] = {        -- the WoW key: "1".."=", "NUMPAD1".."NUMPADPLUS", "BUTTON4", ...
         bar = "Healing Wave", barIcon = 136052,             -- Naga bar slot
         hover = "Lesser Healing Wave", hoverIcon = 136043,  -- Healers of Azeroth hover key
         bind = "ACTIONBUTTON1",                             -- Blizzard's own binding
@@ -144,7 +189,8 @@ NagasOfAzerothCharDB.map = {
 ```
 
 All cell fields are optional; empty cells and empty layers are left out; icons are fileIDs.
-The grid position of a key follows from the plate (section 2): walk the keys row by row.
+The cells keep WoW key names. To place a cell on the plate, find its key in `buttons` (that gives
+the Synapse button number) and the number in the plate's grid (section 2).
 
 ## 12. Coming from Casters of Azeroth
 
