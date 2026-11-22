@@ -1,0 +1,25 @@
+## Interface: 16001
+## Category: Addons of Azeroth
+## Title: Nagas of Azeroth
+## Notes: Razer Naga support: a bar laid out like your side plate, Shift/Ctrl/Alt pages, a test screen and the Naga map. One press is one cast.
+## Notes-nlNL: Razer Naga-ondersteuning: een balk met de indeling van je zijplaat, Shift/Ctrl/Alt-pagina's, een testscherm en de Naga-kaart. Eén druk is één cast.
+## Author: DinX
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Gizmo_02
+## SavedVariables: NagasOfAzerothDB
+## SavedVariablesPerCharacter: NagasOfAzerothCharDB
+## OptionalDeps: CastersOfAzeroth, HealersOfAzeroth
+
+Hub.lua
+libs\LibStub\LibStub.lua
+libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+libs\LibButtonGlow-1.0\LibButtonGlow-1.0.lua
+libs\LibActionButton-1.0\LibActionButton-1.0.lua
+
+Core.lua
+Locale.lua
+Style.lua
+Naga.lua
+Map.lua
+Config.lua
+HubEntry.lua
