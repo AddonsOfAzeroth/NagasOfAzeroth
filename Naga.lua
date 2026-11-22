@@ -21,7 +21,7 @@ local LBG = LibStub("LibButtonGlow-1.0", true)
 -- editor uses the same shapes and order.
 local PLATES = {
 	["12"] = { rows = 4, cols = 3, keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" } },
-	["6"] = { rows = 3, cols = 2, keys = { "5", "1", "6", "2", "7", "3" } }, -- Synapse: left column 5 6 7, right column 1 2 3
+	["6"] = { rows = 3, cols = 2, keys = { "4", "1", "5", "2", "6", "3" } }, -- Synapse: left column 4 5 6, right column 1 2 3
 	["2"] = { rows = 2, cols = 1, keys = { "BUTTON4", "BUTTON5" } },
 }
 N.PLATES = PLATES
